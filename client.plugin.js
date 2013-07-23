@@ -1,4 +1,4 @@
-(function ($) {
+(function () {
   if (window.WebSocket === undefined) {
     return alert('Watch App requires a browser with WebSockets.');
   }
@@ -6,19 +6,47 @@
   var currentPageId = null;
       watchedPages = {},
       userId = {},
-      ws = new WebSocket('ws://special.io:9000');
+      ws = null;
 
-  ws.onmessage = function (evt) {
-    var data = evt.data.split("|");
-    command = data.shift();
+  function createSocket () {
+    ws = new WebSocket('ws://special.io:9000');
 
-    if (command === 'UUID') {
-      userId = data.shift();
-    } else if (command === 'R') {
-      tabId = data.shift();
-      chrome.tabs.reload(parseInt(tabId, 10));
+    ws.onmessage = function (evt) {
+      var data = evt.data.split("|");
+      command = data.shift();
+
+      if (command === 'UUID') {
+        userId = data.shift();
+      } else if (command === 'R') {
+        tabId = data.shift();
+        chrome.tabs.reload(parseInt(tabId, 10));
+      }
     }
-  };
+
+    ws.onclose = function (evt) {
+      // Try to reconnect on close
+      ws = null;
+      console.log("Disconnected.");
+      setTimeout(function () {
+        console.log("Trying to reconnect...");
+        createSocket();
+      }, 2000);
+    }
+
+    ws.onopen = function () {
+      // Issue Reconnect
+      connected = true;
+      console.log("Connected.");
+      if (Object.keys(watchedPages).length !== 0) {
+        Object.keys(watchedPages).forEach(function (tabId) {
+          ws.send('WP|'+tabId+'|'+watchedPages[tabId]);
+          console.log('WP|'+tabId+'|'+watchedPages[tabId]);
+        });
+      }
+    }
+  }
+
+  createSocket();
 
   iconActions = {
     turnIconOn: function () {
@@ -35,7 +63,7 @@
 
   chrome.tabs.onActivated.addListener(function (activateInfo) {
     currentPageId = activateInfo.tabId;
-    if (watchedPages[currentPageId]) {
+    if (typeof watchedPages[currentPageId] !== 'undefined') {
       iconActions.turnIconOn()
     } else {
       iconActions.turnIconOff()
@@ -53,7 +81,7 @@
       iconActions.turnIconOn()
       chrome.tabs.getSelected(null, function(tab) {
         console.log("Now watching page "+tab.id+" ("+tab.url+")");
-        watchedPages[tab.id] = true;
+        watchedPages[tab.id] = tab.url;
         ws.send('WP|'+tab.id+'|'+tab.url);
       });
       watchPage = true;
@@ -67,37 +95,4 @@
       });
     }
   });
-})(jQuery);
-
-/*
-function WebSocketTest()
-{
-  if ("WebSocket" in window)
-  {
-     alert("WebSocket is supported by your Browser!");
-     // Let us open a web socket
-     var ws = new WebSocket("ws://localhost:9998/echo");
-     ws.onopen = function()
-     {
-        // Web Socket is connected, send data using send()
-        ws.send("Message to send");
-        alert("Message is sent...");
-     };
-     ws.onmessage = function (evt) 
-     { 
-        var received_msg = evt.data;
-        alert("Message is received...");
-     };
-     ws.onclose = function()
-     { 
-        // websocket is closed.
-        alert("Connection is closed..."); 
-     };
-  }
-  else
-  {
-     // The browser doesn't support WebSocket
-     alert("WebSocket NOT supported by your Browser!");
-  }
-}
-*/
+})();
