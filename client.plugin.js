@@ -20,6 +20,7 @@
       } else if (command === 'R') {
         tabId = data.shift();
         chrome.tabs.reload(parseInt(tabId, 10));
+        console.log("Reloading tab "+tabId+".");
       }
     }
 
@@ -71,8 +72,12 @@
   });
 
   chrome.tabs.onRemoved.addListener(function (tabId, removeInfo) {
-    delete watchedPages[tabId];
-    // Also Delete From Server Watch
+    if (typeof watchedPages[tabId] !== 'undefined') {
+      console.log("No longer watching page "+tabId+" ("+watchedPages[tabId]+")");
+      ws.send('SWP|'+tabId+'|'+watchedPages[tabId]);
+      console.log('SWP|'+tabId+'|'+watchedPages[tabId]);
+      delete watchedPages[tabId];
+    }
   });
 
   chrome.browserAction.onClicked.addListener(function(tab) {
@@ -83,6 +88,7 @@
         console.log("Now watching page "+tab.id+" ("+tab.url+")");
         watchedPages[tab.id] = tab.url;
         ws.send('WP|'+tab.id+'|'+tab.url);
+        console.log('WP|'+tab.id+'|'+tab.url);
       });
       watchPage = true;
     } else {
@@ -90,8 +96,9 @@
       iconActions.turnIconOff()
       chrome.tabs.getSelected(null, function(tab) {
         console.log("No longer watching page "+tab.id+" ("+tab.url+")");
-        watchedPages[tab.id] = false;
         ws.send('SWP|'+tab.id+'|'+tab.url);
+        console.log('SWP|'+tab.id+'|'+tab.url);
+        delete watchedPages[tab.id];
       });
     }
   });
